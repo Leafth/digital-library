@@ -31,3 +31,13 @@ Apresenta os componentes internos da API NestJS, organizados conforme os princí
 Apresenta os componentes do processamento assíncrono de notificações: o agendamento de lembretes de devolução (NestJS Scheduler), o consumo de tarefas da fila (BullMQ), o processamento e a montagem das mensagens, a consulta aos dados no PostgreSQL e a integração com o Serviço de E-mail por SMTP. Segue a mesma organização hexagonal da API, com adaptadores de entrada, casos de uso, portas e adaptadores de saída.
 
 ![Diagrama de Componentes do Processador de Notificações](diagrams/c3-processador-notificacoes.svg)
+
+## C4 — Diagrama de Código
+
+Os diagramas de código são diagramas de classes UML desenvolvidos em **PlantUML**, com código-fonte em [plantuml](plantuml/).
+
+### Realização de Empréstimos
+
+Detalha as classes, interfaces e dependências do componente **Casos de Uso: Empréstimos** da API. O `RealizarEmprestimoUseCase` aplica as regras da `PoliticaEmprestimo` (leitor ativo, limite de 3 empréstimos ativos, bloqueio por atraso e prazo de 14 dias) e respeita a prioridade da fila de reservas da obra. Ele depende apenas das portas de saída, que são implementadas pelos adaptadores Prisma.
+
+![Diagrama de Código - Realização de Empréstimos](diagrams/c4-emprestimos.svg)

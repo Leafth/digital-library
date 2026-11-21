@@ -1,0 +1,327 @@
+@startuml C4_Emprestimos
+' =====================================================================
+' C4 — Diagrama de Código: Realização de Empréstimos
+' Sistema de Biblioteca Digital — Equipe 3
+' Refina o componente "Casos de Uso: Empréstimos" do C3 da API.
+' =====================================================================
+
+title C4 - Código: Realização de Empréstimos de Exemplares Físicos
+
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam nodesep 50
+skinparam ranksep 80
+skinparam defaultFontName Arial
+skinparam packageStyle rectangle
+skinparam ArrowColor #64748b
+skinparam class {
+  BorderColor #334155
+  BackgroundColor #ffffff
+}
+skinparam package {
+  FontColor #ffffff
+  FontStyle bold
+}
+skinparam note {
+  BackgroundColor #fefce8
+  BorderColor #a16207
+}
+
+' ---------------------------------------------------------------------
+' Adaptadores de Entrada
+' ---------------------------------------------------------------------
+package "Adaptadores de Entrada" #1d4ed8 {
+
+  class EmprestimoController <<controller>> {
+    - realizarEmprestimo: RealizarEmprestimoUseCase
+    + realizar(dto: RealizarEmprestimoDto): Promise<EmprestimoResponseDto>
+  }
+  note top of EmprestimoController
+    POST /emprestimos
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles(BIBLIOTECARIO)
+  end note
+
+  class RealizarEmprestimoDto <<DTO>> {
+    + leitorId: string
+    + exemplarId: string
+  }
+
+  class EmprestimoResponseDto <<DTO>> {
+    + id: string
+    + leitorId: string
+    + exemplarId: string
+    + dataEmprestimo: string
+    + dataPrevistaDevolucao: string
+    + status: string
+  }
+
+  class JwtAuthGuard <<guard>>
+  class RolesGuard <<guard>>
+}
+
+' ---------------------------------------------------------------------
+' Aplicação
+' ---------------------------------------------------------------------
+package "Aplicação" #0284c7 {
+
+  class RealizarEmprestimoUseCase <<use case>> {
+    - leitores: LeitorRepository
+    - exemplares: ExemplarRepository
+    - emprestimos: EmprestimoRepository
+    - reservas: ReservaRepository
+    - unitOfWork: UnitOfWork
+    - relogio: Relogio
+    - politica: PoliticaEmprestimo
+    + executar(entrada: RealizarEmprestimoInput): Promise<RealizarEmprestimoOutput>
+  }
+
+  class RealizarEmprestimoInput <<record>> {
+    + leitorId: string
+    + exemplarId: string
+  }
+
+  class RealizarEmprestimoOutput <<record>> {
+    + emprestimoId: string
+    + leitorId: string
+    + exemplarId: string
+    + dataEmprestimo: Date
+    + dataPrevistaDevolucao: Date
+  }
+}
+
+' ---------------------------------------------------------------------
+' Domínio
+' ---------------------------------------------------------------------
+package "Domínio" #0f766e {
+
+  class Emprestimo <<entity>> {
+    - id: string
+    - leitorId: string
+    - exemplarId: string
+    - dataEmprestimo: Date
+    - dataPrevistaDevolucao: Date
+    - dataDevolucao: Date | null
+    - status: StatusEmprestimo
+    + {static} criar(leitor: Leitor, exemplar: Exemplar, dataEmprestimo: Date, dataPrevistaDevolucao: Date): Emprestimo
+    + estaAtrasado(dataAtual: Date): boolean
+  }
+
+  class Exemplar <<entity>> {
+    - id: string
+    - obraId: string
+    - codigoTombo: string
+    - status: StatusExemplar
+    + estaDisponivel(): boolean
+    + estaReservado(): boolean
+    + emprestar(): void
+  }
+
+  class Leitor <<entity>> {
+    - id: string
+    - nome: string
+    - email: string
+    - situacao: SituacaoLeitor
+    + estaAtivo(): boolean
+  }
+
+  class Reserva <<entity>> {
+    - id: string
+    - obraId: string
+    - leitorId: string
+    - dataSolicitacao: Date
+    - prazoRetirada: Date | null
+    - status: StatusReserva
+    + pertenceA(leitorId: string): boolean
+    + atender(): void
+  }
+
+  class PoliticaEmprestimo <<domain service>> {
+    + {static} LIMITE_EMPRESTIMOS_ATIVOS: number = 3
+    + {static} PRAZO_DEVOLUCAO_DIAS: number = 14
+    + validarElegibilidade(leitor: Leitor, ativos: Emprestimo[], dataAtual: Date): void
+    + calcularDataPrevistaDevolucao(dataEmprestimo: Date): Date
+  }
+  note bottom of PoliticaEmprestimo
+    Regras de empréstimo:
+    1. Leitor deve estar ATIVO.
+    2. Máximo de 3 empréstimos ativos por leitor.
+    3. Leitor com empréstimo em atraso fica bloqueado.
+    4. Prazo de devolução: 14 dias corridos.
+    5. Exemplar RESERVADO só pode ser emprestado
+       ao leitor da primeira reserva da fila da obra.
+  end note
+
+  enum StatusExemplar {
+    DISPONIVEL
+    EMPRESTADO
+    RESERVADO
+    INDISPONIVEL
+  }
+
+  enum StatusEmprestimo {
+    ATIVO
+    DEVOLVIDO
+  }
+
+  enum StatusReserva {
+    PENDENTE
+    AGUARDANDO_RETIRADA
+    ATENDIDA
+    CANCELADA
+    EXPIRADA
+  }
+
+  enum SituacaoLeitor {
+    ATIVO
+    SUSPENSO
+    INATIVO
+  }
+
+  abstract class DomainError <<exception>>
+  class LeitorInativoError <<exception>>
+  class LimiteEmprestimosAtingidoError <<exception>>
+  class EmprestimoEmAtrasoError <<exception>>
+  class ExemplarIndisponivelError <<exception>>
+  class ReservaPrioritariaError <<exception>>
+}
+
+' ---------------------------------------------------------------------
+' Portas de Saída
+' ---------------------------------------------------------------------
+package "Portas de Saída" #7c3aed {
+
+  interface LeitorRepository <<port>> {
+    + buscarPorId(id: string): Promise<Leitor | null>
+  }
+
+  interface ExemplarRepository <<port>> {
+    + buscarPorIdComBloqueio(id: string): Promise<Exemplar | null>
+    + salvar(exemplar: Exemplar): Promise<void>
+  }
+
+  interface EmprestimoRepository <<port>> {
+    + listarAtivosPorLeitor(leitorId: string): Promise<Emprestimo[]>
+    + salvar(emprestimo: Emprestimo): Promise<void>
+  }
+
+  interface ReservaRepository <<port>> {
+    + buscarProximaDaFila(obraId: string): Promise<Reserva | null>
+    + salvar(reserva: Reserva): Promise<void>
+  }
+
+  interface UnitOfWork <<port>> {
+    + executar<T>(trabalho: () => Promise<T>): Promise<T>
+  }
+
+  interface Relogio <<port>> {
+    + agora(): Date
+  }
+}
+
+' ---------------------------------------------------------------------
+' Adaptadores de Saída
+' ---------------------------------------------------------------------
+package "Adaptadores de Saída" #475569 {
+
+  class PrismaLeitorRepository <<adapter>>
+  class PrismaExemplarRepository <<adapter>>
+  class PrismaEmprestimoRepository <<adapter>>
+  class PrismaReservaRepository <<adapter>>
+  class PrismaUnitOfWork <<adapter>>
+  class RelogioSistema <<adapter>>
+
+  class PrismaService <<infra>> {
+    + $transaction(fn): Promise<T>
+  }
+  note bottom of PrismaService
+    Estende PrismaClient e acessa
+    o PostgreSQL (container Banco de Dados).
+  end note
+}
+
+' =====================================================================
+' Relações
+' =====================================================================
+
+' Entrada -> Aplicação
+JwtAuthGuard .right.> EmprestimoController : protege
+RolesGuard .right.> EmprestimoController : autoriza
+EmprestimoController .down.> RealizarEmprestimoDto : recebe
+EmprestimoController .down.> EmprestimoResponseDto : retorna
+EmprestimoController -down-> RealizarEmprestimoUseCase : executa
+
+' Aplicação -> Aplicação
+RealizarEmprestimoUseCase ..> RealizarEmprestimoInput : recebe
+RealizarEmprestimoUseCase ..> RealizarEmprestimoOutput : retorna
+
+' Aplicação -> Domínio
+RealizarEmprestimoUseCase --> PoliticaEmprestimo : aplica regras
+RealizarEmprestimoUseCase ..> Emprestimo : cria
+RealizarEmprestimoUseCase ..> Exemplar : empresta
+RealizarEmprestimoUseCase ..> Reserva : atende
+RealizarEmprestimoUseCase ..> Leitor : consulta
+RealizarEmprestimoUseCase ..> ReservaPrioritariaError : lança
+
+' Aplicação -> Portas (portas abaixo do caso de uso)
+RealizarEmprestimoUseCase -down-> LeitorRepository
+RealizarEmprestimoUseCase -down-> ExemplarRepository
+RealizarEmprestimoUseCase -down-> EmprestimoRepository
+RealizarEmprestimoUseCase -down-> ReservaRepository
+RealizarEmprestimoUseCase -down-> UnitOfWork
+RealizarEmprestimoUseCase -down-> Relogio
+
+' Domínio (interno)
+Emprestimo -down-> StatusEmprestimo
+Exemplar -down-> StatusExemplar
+Reserva -down-> StatusReserva
+Leitor -down-> SituacaoLeitor
+Emprestimo "0..*" --> "1" Leitor
+Emprestimo "0..*" --> "1" Exemplar
+Reserva "0..*" --> "1" Leitor
+PoliticaEmprestimo ..> Leitor
+PoliticaEmprestimo ..> Emprestimo
+PoliticaEmprestimo ..> LeitorInativoError : lança
+PoliticaEmprestimo ..> LimiteEmprestimosAtingidoError : lança
+PoliticaEmprestimo ..> EmprestimoEmAtrasoError : lança
+Exemplar ..> ExemplarIndisponivelError : lança
+
+DomainError <|-up- LeitorInativoError
+DomainError <|-up- LimiteEmprestimosAtingidoError
+DomainError <|-up- EmprestimoEmAtrasoError
+DomainError <|-up- ExemplarIndisponivelError
+DomainError <|-up- ReservaPrioritariaError
+
+' Adaptadores implementam Portas (adaptadores abaixo das portas)
+PrismaLeitorRepository .up.|> LeitorRepository
+PrismaExemplarRepository .up.|> ExemplarRepository
+PrismaEmprestimoRepository .up.|> EmprestimoRepository
+PrismaReservaRepository .up.|> ReservaRepository
+PrismaUnitOfWork .up.|> UnitOfWork
+RelogioSistema .up.|> Relogio
+
+' Adaptadores -> Infraestrutura
+PrismaLeitorRepository -down-> PrismaService
+PrismaExemplarRepository -down-> PrismaService
+PrismaEmprestimoRepository -down-> PrismaService
+PrismaReservaRepository -down-> PrismaService
+PrismaUnitOfWork -down-> PrismaService
+
+' Fluxo do caso de uso
+note right of RealizarEmprestimoUseCase
+  executar() — dentro de unitOfWork.executar():
+  1. leitores.buscarPorId(leitorId)
+  2. emprestimos.listarAtivosPorLeitor(leitorId)
+  3. politica.validarElegibilidade(leitor, ativos, agora)
+  4. exemplares.buscarPorIdComBloqueio(exemplarId)
+  5. reservas.buscarProximaDaFila(exemplar.obraId)
+     - se existe e não pertence ao leitor → ReservaPrioritariaError
+     - se pertence ao leitor → reserva.atender()
+     - se não existe e exemplar não está DISPONIVEL
+       → ExemplarIndisponivelError
+  6. Emprestimo.criar(...) com prazo da política
+  7. exemplar.emprestar()  (status → EMPRESTADO)
+  8. salvar emprestimo, exemplar e reserva
+end note
+
+@enduml
