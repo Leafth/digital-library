@@ -25,3 +25,13 @@ Detalha os principais containers do sistema: Aplicação Web, API da Biblioteca,
 Apresenta os componentes internos da API NestJS, organizados conforme os princípios da Arquitetura Hexagonal e da Clean Architecture, incluindo adaptadores de entrada, casos de uso, domínio, portas e adaptadores de saída.
 
 ![Diagrama de Componentes da API](diagrams/c3-api.svg)
+
+## C4 — Diagrama de Código
+
+Os diagramas de código são diagramas de classes UML desenvolvidos em **PlantUML**, com código-fonte em [plantuml](plantuml/).
+
+### Realização de Empréstimos
+
+Detalha as classes, interfaces e dependências do componente **Casos de Uso: Empréstimos** da API. O `RealizarEmprestimoUseCase` aplica as regras da `PoliticaEmprestimo` (leitor ativo, limite de 3 empréstimos ativos, bloqueio por atraso e prazo de 14 dias) e respeita a prioridade da fila de reservas da obra. Ele depende apenas das portas de saída, que são implementadas pelos adaptadores Prisma.
+
+![Diagrama de Código - Realização de Empréstimos](diagrams/c4-emprestimos.svg)
