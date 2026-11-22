@@ -1,0 +1,228 @@
+@startuml C4_Devolucoes
+' C4 — Diagrama de Código: Registro de Devoluções
+' Sistema de Biblioteca Digital
+' Refina o componente "Casos de Uso: Devoluções" do C3.
+
+ title C4 - Código: Registro de Devoluções de Exemplares Físicos
+
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam defaultFontName Arial
+skinparam linetype ortho
+skinparam ArrowColor #64748b
+skinparam class {
+  BorderColor #334155
+  BackgroundColor #ffffff
+}
+skinparam package {
+  FontColor #ffffff
+  FontStyle bold
+}
+skinparam note {
+  BackgroundColor #fefce8
+  BorderColor #a16207
+}
+
+package "Adaptadores de Entrada" #1d4ed8 {
+  class DevolucaoController <<controller>> {
+    - registrarDevolucao: RegistrarDevolucaoUseCase
+    + registrar(emprestimoId: string): Promise<DevolucaoResponseDto>
+  }
+  class DevolucaoResponseDto <<DTO>> {
+    + emprestimoId: string
+    + exemplarId: string
+    + dataDevolucao: string
+    + statusEmprestimo: string
+    + statusExemplar: string
+    + proximoLeitorId: string | null
+  }
+  class JwtAuthGuard <<guard>>
+  class RolesGuard <<guard>>
+  note top of DevolucaoController
+    PATCH /emprestimos/{id}/devolucao (proposta)
+    Autenticação JWT e autorização BIBLIOTECARIO
+  end note
+}
+
+package "Aplicação" #0284c7 {
+  class RegistrarDevolucaoUseCase <<use case>> {
+    - emprestimos: EmprestimoRepository
+    - exemplares: ExemplarRepository
+    - reservas: ReservaRepository
+    - unitOfWork: UnitOfWork
+    - relogio: Relogio
+    + executar(entrada: RegistrarDevolucaoInput): Promise<RegistrarDevolucaoOutput>
+  }
+  class RegistrarDevolucaoInput <<record>> {
+    + emprestimoId: string
+  }
+  class RegistrarDevolucaoOutput <<record>> {
+    + emprestimoId: string
+    + exemplarId: string
+    + dataDevolucao: Date
+    + statusEmprestimo: StatusEmprestimo
+    + statusExemplar: StatusExemplar
+    + proximoLeitorId: string | null
+  }
+}
+
+package "Domínio" #0f766e {
+  class Emprestimo <<entity>> {
+    - id: string
+    - leitorId: string
+    - exemplarId: string
+    - dataEmprestimo: Date
+    - dataPrevistaDevolucao: Date
+    - dataDevolucao: Date | null
+    - status: StatusEmprestimo
+    + devolver(data: Date): void
+  }
+  class Exemplar <<entity>> {
+    - id: string
+    - obraId: string
+    - codigoTombo: string
+    - status: StatusExemplar
+    + disponibilizar(): void
+    + reservar(): void
+  }
+  class Reserva <<entity>> {
+    - id: string
+    - obraId: string
+    - leitorId: string
+    - dataSolicitacao: Date
+    - prazoRetirada: Date | null
+    - status: StatusReserva
+    + aguardarRetirada(): void
+  }
+  class Leitor <<entity>> {
+    - id: string
+    - nome: string
+    - email: string
+    - situacao: SituacaoLeitor
+  }
+  enum StatusEmprestimo {
+    ATIVO
+    DEVOLVIDO
+  }
+  enum StatusExemplar {
+    DISPONIVEL
+    EMPRESTADO
+    RESERVADO
+    INDISPONIVEL
+  }
+  enum StatusReserva {
+    PENDENTE
+    AGUARDANDO_RETIRADA
+    ATENDIDA
+    CANCELADA
+    EXPIRADA
+  }
+  enum SituacaoLeitor {
+    ATIVO
+    SUSPENSO
+    INATIVO
+  }
+  abstract class DomainError <<exception>>
+  class EmprestimoNaoEncontradoError <<exception>>
+  class EmprestimoJaDevolvidoError <<exception>>
+  class ExemplarNaoEncontradoError <<exception>>
+}
+
+package "Portas de Saída" #7c3aed {
+  interface EmprestimoRepository <<port>> {
+    + buscarPorIdComBloqueio(id: string): Promise<Emprestimo | null>
+    + salvar(emprestimo: Emprestimo): Promise<void>
+  }
+  interface ExemplarRepository <<port>> {
+    + buscarPorIdComBloqueio(id: string): Promise<Exemplar | null>
+    + salvar(exemplar: Exemplar): Promise<void>
+  }
+  interface ReservaRepository <<port>> {
+    + buscarProximaDaFila(obraId: string): Promise<Reserva | null>
+    + salvar(reserva: Reserva): Promise<void>
+  }
+  interface UnitOfWork <<port>> {
+    + executar<T>(trabalho: () => Promise<T>): Promise<T>
+  }
+  interface Relogio <<port>> {
+    + agora(): Date
+  }
+}
+
+package "Adaptadores de Saída" #475569 {
+  class PrismaEmprestimoRepository <<adapter>>
+  class PrismaExemplarRepository <<adapter>>
+  class PrismaReservaRepository <<adapter>>
+  class PrismaUnitOfWork <<adapter>>
+  class RelogioSistema <<adapter>>
+  class PrismaService <<infra>> {
+    + $transaction(fn): Promise<T>
+  }
+  note bottom of PrismaService
+    Prisma Client / PostgreSQL
+    Persistência sob transação atômica.
+  end note
+}
+
+JwtAuthGuard ..> DevolucaoController : protege
+RolesGuard ..> DevolucaoController : autoriza
+DevolucaoController --> RegistrarDevolucaoUseCase : executa
+DevolucaoController ..> DevolucaoResponseDto : retorna
+
+RegistrarDevolucaoUseCase ..> RegistrarDevolucaoInput : recebe
+RegistrarDevolucaoUseCase ..> RegistrarDevolucaoOutput : retorna
+RegistrarDevolucaoUseCase ..> Emprestimo : devolver()
+RegistrarDevolucaoUseCase ..> Exemplar : reservar()/disponibilizar()
+RegistrarDevolucaoUseCase ..> Reserva : aguardarRetirada()
+RegistrarDevolucaoUseCase ..> EmprestimoNaoEncontradoError : lança
+RegistrarDevolucaoUseCase ..> ExemplarNaoEncontradoError : lança
+
+RegistrarDevolucaoUseCase --> EmprestimoRepository : consulta/persiste
+RegistrarDevolucaoUseCase --> ExemplarRepository : consulta/persiste
+RegistrarDevolucaoUseCase --> ReservaRepository : consulta fila/persiste
+RegistrarDevolucaoUseCase --> UnitOfWork : transação
+RegistrarDevolucaoUseCase --> Relogio : data atual
+
+Emprestimo --> StatusEmprestimo
+Exemplar --> StatusExemplar
+Reserva --> StatusReserva
+Leitor --> SituacaoLeitor
+Emprestimo "0..*" --> "1" Exemplar
+Emprestimo "0..*" --> "1" Leitor
+Reserva "0..*" --> "1" Leitor
+Emprestimo ..> EmprestimoJaDevolvidoError : lança
+DomainError <|-- EmprestimoNaoEncontradoError
+DomainError <|-- EmprestimoJaDevolvidoError
+DomainError <|-- ExemplarNaoEncontradoError
+
+PrismaEmprestimoRepository ..|> EmprestimoRepository
+PrismaExemplarRepository ..|> ExemplarRepository
+PrismaReservaRepository ..|> ReservaRepository
+PrismaUnitOfWork ..|> UnitOfWork
+RelogioSistema ..|> Relogio
+PrismaEmprestimoRepository --> PrismaService
+PrismaExemplarRepository --> PrismaService
+PrismaReservaRepository --> PrismaService
+PrismaUnitOfWork --> PrismaService
+
+note right of RegistrarDevolucaoUseCase
+  executar() — dentro de unitOfWork.executar():
+  1. Buscar e bloquear empréstimo; validar status ATIVO.
+  2. Buscar e bloquear exemplar associado.
+  3. Registrar devolução e status DEVOLVIDO.
+  4. Buscar primeira reserva PENDENTE da obra,
+     respeitando a ordem da fila.
+  5. Se houver reserva:
+       identificar reserva.leitorId;
+       reserva.aguardarRetirada();
+       exemplar.reservar() -> RESERVADO.
+     Senão:
+       exemplar.disponibilizar() -> DISPONIVEL.
+  6. Persistir empréstimo, exemplar e reserva
+     (quando houver) na mesma transação.
+  7. Retornar resultado da devolução.
+
+  Sem mensageria ou notificações.
+end note
+@enduml

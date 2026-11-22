@@ -41,3 +41,9 @@ Os diagramas de código são diagramas de classes UML desenvolvidos em **PlantUM
 Detalha as classes, interfaces e dependências do componente **Casos de Uso: Empréstimos** da API. O `RealizarEmprestimoUseCase` aplica as regras da `PoliticaEmprestimo` (leitor ativo, limite de 3 empréstimos ativos, bloqueio por atraso e prazo de 14 dias) e respeita a prioridade da fila de reservas da obra. Ele depende apenas das portas de saída, que são implementadas pelos adaptadores Prisma.
 
 ![Diagrama de Código - Realização de Empréstimos](diagrams/c4-emprestimos.svg)
+
+### Registro de Devoluções
+
+Detalha as classes, interfaces e dependências do componente **Casos de Uso: Devoluções** da API. O `RegistrarDevolucaoUseCase` é responsável por registrar a devolução do empréstimo, consultar as reservas pendentes da obra e identificar o próximo leitor da fila, quando houver. Conforme a existência de reservas, atualiza a situação do exemplar para `RESERVADO` ou `DISPONIVEL`, garantindo a consistência das operações por meio de transações. O caso de uso depende apenas das portas de saída, que são implementadas pelos adaptadores Prisma.
+
+![Diagrama de Código - Registro de Devoluções](diagrams/c4-devolucao.svg)
