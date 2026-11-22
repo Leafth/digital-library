@@ -97,6 +97,58 @@ workspace "Biblioteca Digital" "Arquitetura C4" {
             // Processamento assíncrono
             worker = container "Processador de Notificações" "Consome jobs, envia notificações e agenda lembretes de devolução." "NestJS, TypeScript, BullMQ, Scheduler" {
                 tags "Worker"
+
+                group "Adaptadores de Entrada" {
+                    agendador = component "Agendador de Lembretes" "Dispara periodicamente a busca de empréstimos próximos do vencimento." "NestJS Scheduler (@Cron)" {
+                        tags "Entrada"
+                    }
+
+                    consumidor = component "Consumidor de Tarefas" "Consome os jobs da fila e aciona o caso de uso correspondente." "BullMQ Processor" {
+                        tags "Entrada"
+                    }
+                }
+
+                group "Aplicação" {
+                    ucLembretes = component "Caso de Uso: Agendar Lembretes" "Identifica empréstimos a vencer e gera as tarefas de lembrete." {
+                        tags "Aplicacao"
+                    }
+
+                    ucNotificar = component "Caso de Uso: Processar Notificação" "Reúne os dados do leitor e da obra e dispara o envio." {
+                        tags "Aplicacao"
+                    }
+
+                    mensagens = component "Montador de Mensagens" "Monta assunto e corpo do e-mail a partir de templates." {
+                        tags "Aplicacao"
+                    }
+                }
+
+                group "Portas de Saída" {
+                    dadosPort = component "Notification Data Port" "Contrato de consulta a leitores, obras e empréstimos." {
+                        tags "Porta"
+                    }
+
+                    publicarPort = component "Job Publisher Port" "Contrato de publicação de tarefas." {
+                        tags "Porta"
+                    }
+
+                    emailPort = component "Email Sender Port" "Contrato de envio de e-mail." {
+                        tags "Porta"
+                    }
+                }
+
+                group "Adaptadores de Saída" {
+                    prismaLeitura = component "Prisma Read Repositories" "Consultas de leitura com Prisma." "Prisma" {
+                        tags "Adaptador"
+                    }
+
+                    bullPublisher = component "BullMQ Publisher" "Publicação de jobs na fila." "BullMQ" {
+                        tags "Adaptador"
+                    }
+
+                    smtp = component "SMTP Email Adapter" "Integração com o serviço de e-mail." "Nodemailer" {
+                        tags "Adaptador"
+                    }
+                }
             }
         }
 
@@ -169,6 +221,25 @@ workspace "Biblioteca Digital" "Arquitetura C4" {
         bullmq -> fila "Publica jobs" "BullMQ"
 
         http -> conteudo "Obtém arquivos" "HTTPS"
+
+        // Processador de Notificações (C3)
+        consumidor -> fila "Consome tarefas" "BullMQ"
+        agendador -> ucLembretes "Dispara periodicamente"
+        consumidor -> ucNotificar "Executa"
+
+        ucLembretes -> dadosPort "Busca empréstimos a vencer"
+        ucLembretes -> publicarPort "Publica tarefas de lembrete"
+        ucNotificar -> dadosPort "Consulta leitor e obra"
+        ucNotificar -> mensagens "Monta a mensagem"
+        ucNotificar -> emailPort "Envia a notificação"
+
+        prismaLeitura -> dadosPort "Implementa"
+        bullPublisher -> publicarPort "Implementa"
+        smtp -> emailPort "Implementa"
+
+        prismaLeitura -> banco "Lê dados" "Prisma"
+        bullPublisher -> fila "Publica jobs" "BullMQ"
+        smtp -> email "Envia e-mails" "SMTP"
     }
 
     views {
@@ -189,6 +260,12 @@ workspace "Biblioteca Digital" "Arquitetura C4" {
             title "C3 - Componentes da API da Biblioteca"
             include *
             autoLayout lr
+        }
+
+        component worker "C3_Processador_Notificacoes" {
+            title "C3 - Componentes do Processador de Notificações"
+            include *
+            autoLayout tb
         }
 
         styles {

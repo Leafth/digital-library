@@ -25,3 +25,9 @@ Detalha os principais containers do sistema: Aplicação Web, API da Biblioteca,
 Apresenta os componentes internos da API NestJS, organizados conforme os princípios da Arquitetura Hexagonal e da Clean Architecture, incluindo adaptadores de entrada, casos de uso, domínio, portas e adaptadores de saída.
 
 ![Diagrama de Componentes da API](diagrams/c3-api.svg)
+
+### Processador de Notificações
+
+Apresenta os componentes do processamento assíncrono de notificações: o agendamento de lembretes de devolução (NestJS Scheduler), o consumo de tarefas da fila (BullMQ), o processamento e a montagem das mensagens, a consulta aos dados no PostgreSQL e a integração com o Serviço de E-mail por SMTP. Segue a mesma organização hexagonal da API, com adaptadores de entrada, casos de uso, portas e adaptadores de saída.
+
+![Diagrama de Componentes do Processador de Notificações](diagrams/c3-processador-notificacoes.svg)
